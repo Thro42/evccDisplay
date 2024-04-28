@@ -37,3 +37,4 @@
 *.out
 *.app
 src/secrets.h
+.vscode/settings.json
