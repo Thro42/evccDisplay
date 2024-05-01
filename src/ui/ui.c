@@ -19,14 +19,24 @@ lv_obj_t * ui_PanelSolar;
 lv_obj_t * ui_LabelSolar;
 lv_obj_t * ui_PanelUsing;
 lv_obj_t * ui_LabelUsing;
+lv_obj_t * ui_imgSolar;
+lv_obj_t * ui_imgGrid;
 lv_obj_t * ui_carCont;
 lv_obj_t * ui_carBarCont;
 lv_obj_t * ui_PanelSoc;
 lv_obj_t * ui_LabelSoc;
 lv_obj_t * ui_PanelMax;
+lv_obj_t * ui_battery;
 lv_obj_t * ui_infoCont;
 lv_obj_t * ui_chargeLbl;
+lv_obj_t * ui_imgCar;
+lv_obj_t * ui_showerg;
+lv_obj_t * ui_showerw;
 lv_obj_t * ui____initial_actions0;
+const lv_img_dsc_t * ui_imgset_batery[2] = {&ui_img_batery40_png, &ui_img_batery24_png};
+const lv_img_dsc_t * ui_imgset_solar[1] = {&ui_img_solar24_png};
+const lv_img_dsc_t * ui_imgset_auto[1] = {&ui_img_auto24_png};
+const lv_img_dsc_t * ui_imgset_power[1] = {&ui_img_power24_png};
 
 ///////////////////// TEST LVGL SETTINGS ////////////////////
 #if LV_COLOR_DEPTH != 16
