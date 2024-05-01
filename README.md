@@ -8,6 +8,7 @@ The mission was to show simula information as the Web-Interface of my EVCC-insta
 ## Display
 
 The dispay has tree section.
+<img title="Display" alt="Display" src="/images/display-design.png">
 
 1. Solar and Grid information
 2. Car State of charge
