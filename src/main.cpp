@@ -1,5 +1,5 @@
 #include <Arduino.h>
-
+#include <time.h>
 #include <esp32_smartdisplay.h>
 #include <ui/ui.h>
 #include <WiFi.h>
@@ -7,11 +7,15 @@
 #include <AsyncTCP.h>
 #include "mqtt.h"
 #include "secrets.h"
+#include "main.h"
 
 const char* ssid = WIFI_SSID;
 const char* password = WIFI_PASSWORD;
 const char* deviceName = DEVICE_NAME;
 const char* hostname = WIFI_HOSTNAME;
+auto lv_last_tick = millis();
+bool _drawPowerSlider;
+bool _drawSocSlider;
 
 #ifdef LOCAL_IP
 // Set your Static IP address
@@ -69,8 +73,23 @@ void setup() {
 
 void loop() {
     loopMQTT();
-
+    // Update the UI
+    if (_drawPowerSlider)
+    {
+        _drawPowerSlider = false;
+        drawPowerSlider();
+    }
+    if (_drawSocSlider)
+    {
+        _drawSocSlider = false;
+        drawSocSlider();
+    }
     lv_timer_handler();
+    auto const now = millis();
+    // Update the ticker
+    lv_tick_inc(now - lv_last_tick);
+    lv_last_tick = now;
+    delay(5); /* let this time pass */
 }
 
 float _pvPower = 0;
@@ -80,9 +99,10 @@ int _chargeDuration = 0;
 int _chargedEnergy = 0;
 int _chargePower = 0;
 bool _charging = false;
+float _batSoc = 0;
 
 void drawPowerSlider() {
-    char buf[10];
+    char buf[30];
     int pvPercent;
     int pwPercent;
     float powerSum;
@@ -96,41 +116,66 @@ void drawPowerSlider() {
         pvPercent = 0;
         pwPercent = 100;
     } else {
-        pvPercent = (int) ((_pvPower / powerSum) * 100);
+        if (powerSum <= 0) {
+            pvPercent = 0;
+        } else {
+            pvPercent = (int) ((_pvPower / powerSum) * 100);
+        }
         pwPercent = 100 - pvPercent;
     }
     // 
-    lv_obj_set_width(ui_PanelSolar, lv_pct(pvPercent));
+    if (pvPercent <= 0)
+    {
+        pvPercent = 0;
+    } else {
+        lv_obj_set_width(ui_PanelSolar, lv_pct(pvPercent));
+    }
+    
     int pvInt = (int) _pvPower;
-    sprintf(buf,"%d",pvInt);
-    lv_label_set_text(ui_LabelSolar, buf);
+    if (pvInt > 0)
+    {
+        sprintf(buf,"%d",pvInt);
+        lv_label_set_text(ui_LabelSolar, buf);
+    }
+    
     //
+    lv_color_t bg_color;
     if (_gridPower < 0)
     {
-        lv_obj_set_style_bg_color(ui_PanelUsing, lv_color_hex(0xFFFF00), LV_PART_MAIN | LV_STATE_DEFAULT);
+        bg_color = lv_color_hex(0xffff00);
     } else {
-        lv_obj_set_style_bg_color(ui_PanelUsing, lv_color_hex(0x0000FF), LV_PART_MAIN | LV_STATE_DEFAULT);
+        bg_color = lv_color_hex(0x0000FF);
     }   
-    lv_obj_set_width(ui_PanelUsing, lv_pct(pwPercent));
-    int pwInt = (int) gridPowerAbs;
-    sprintf(buf,"%d",pwInt);
-    lv_label_set_text(ui_LabelUsing, buf);
+    lv_obj_set_style_bg_color(ui_PanelUsing, bg_color, LV_PART_MAIN);
 
+    lv_obj_set_width(ui_PanelUsing, lv_pct(pwPercent));
+    if (gridPowerAbs > 0)
+    {
+        int pwInt = (int) gridPowerAbs;
+        sprintf(buf,"%d",pwInt);
+        lv_label_set_text(ui_LabelUsing, buf);
+    }
 }
 
 void drawSocSlider() {
-    char buf[20];
+    char buf[30];
     int restPercent = 100 -  _vehicleSoc;
 
     lv_obj_set_width(ui_PanelSoc, lv_pct(_vehicleSoc));
     sprintf(buf,"%d%%",_vehicleSoc);
     lv_label_set_text(ui_LabelSoc, buf);
+    lv_color_t bg_color;
     if (_charging)
     {
-        lv_obj_set_style_bg_color(ui_PanelSoc, lv_color_hex(0xFFFF00), LV_PART_MAIN | LV_STATE_DEFAULT);
+        bg_color = lv_color_hex(0xffff00);
     } else {
-        lv_obj_set_style_bg_color(ui_PanelSoc, lv_color_hex(0x07E179), LV_PART_MAIN | LV_STATE_DEFAULT);
+        bg_color = lv_color_hex(0x07E179);
     }
+    lv_obj_set_style_bg_color(ui_PanelSoc, bg_color, LV_PART_MAIN);
+    if (restPercent <= 0)
+    {
+        restPercent = 0;
+    }    
     lv_obj_set_width(ui_PanelMax, lv_pct(restPercent));
     float power = _chargePower;
     if (_chargePower > 0)
@@ -138,30 +183,38 @@ void drawSocSlider() {
         power = _chargePower / 1000.0;
     }
     
-    sprintf(buf, "%.1f kW", power);
+    sprintf(buf, "%.1fkW", power);
     lv_label_set_text(ui_chargeLbl, buf);
+    float soc = _batSoc;
+    sprintf(buf, "%.1f%%", soc);
+    lv_label_set_text(ui_chargeLbl1, buf);
 
 }
 
 void set_pvPower(float power) {
     _pvPower = power;
-    drawPowerSlider();
+    _drawPowerSlider = true;
 }
 void set_gridPower(float power) {
     _gridPower = power;
-    drawPowerSlider();
+    _drawPowerSlider = true;
 }
 void set_vehicleSoc( int soc) {
     _vehicleSoc = soc;
-    drawSocSlider();
+    _drawSocSlider = true;
 }
 
 void set_charging(bool state ) {
     _charging = state;
-    drawSocSlider();
+    _drawSocSlider = true;
 }
 
 void set_chargePower( int chargePower ){
     _chargePower = chargePower;
-    drawSocSlider();
+    _drawSocSlider = true;
 }
+void set_batSoc(float newSoc) {
+    _batSoc = newSoc;
+    _drawSocSlider = true;
+}
+

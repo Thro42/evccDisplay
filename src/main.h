@@ -9,5 +9,6 @@ void set_gridPower(float power);
 void set_vehicleSoc( int soc);
 void set_charging(bool state );
 void set_chargePower( int chargePower );
+void set_batSoc(float newSoc);
 
 #endif // MAIN_H

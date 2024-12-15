@@ -15,6 +15,14 @@ bool mqttOnline;
 char buffer[2048];
 AsyncMqttClient mqttClient;
 // DynamicJsonDocument doc( 2048 ); // _INIT_N(((2048)));
+ TimerHandle_t watchDogTimer;
+
+void watchDogRestart() {
+  if(!mqttOnline) {
+    Serial.println("Restart Node...");
+    esp_restart() ;
+  }
+}
 
 void connectToMqtt() {
   Serial.println("Connecting to MQTT...");
@@ -43,6 +51,7 @@ void onMqttConnect(bool sessionPresent) {
   mqttClient.subscribe("evcc/loadpoints/1/vehicleSoc", 0);
   mqttClient.subscribe("evcc/loadpoints/1/charging", 0);
   mqttClient.subscribe("evcc/loadpoints/1/chargePower", 0);
+  mqttClient.subscribe("evcc/site/batterySoc", 0);
   // evcc/loadpoints/1/chargeDuration
   // evcc/loadpoints/1/chargedEnergy
   // evcc/loadpoints/1/chargePower
@@ -53,7 +62,7 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
   Serial.println("Disconnected from MQTT.");
   if (WiFi.isConnected()) {
     Serial.println("Start Timer.");
-    xTimerStart(mqttReconnectTimer, 0);
+    xTimerStart(mqttReconnectTimer, 10);
   } else {
     Serial.println("Start Timer.");
     xTimerStart(mqttReconnectTimer, 100);
@@ -61,14 +70,16 @@ void onMqttDisconnect(AsyncMqttClientDisconnectReason reason) {
 }
 
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+
+  xTimerReset(watchDogTimer, 15000);
   char p_buf[20];
-  Serial.println("Publish received.");
+  Serial.print("Publish received: ");
   Serial.println(topic);
   for(int i=0; i<len; i++) {
     p_buf[i] = payload[i];
   }
   p_buf[len] = 0;
-  Serial.println(p_buf);
+  // Serial.println(p_buf);
 
   if(strcmp(topic,"evcc/site/pvPower") == 0)
   {
@@ -110,6 +121,13 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     set_chargePower( chargePower );
     Serial.println(buf);
   }
+// Battery SOC
+  if(strcmp(topic,"evcc/site/batterySoc") == 0)
+  {
+    float batSoc = atof(payload);
+    set_batSoc(batSoc);
+    Serial.println(batSoc);
+  }
 }
 
 void onMqttSubscribe(uint16_t packetId, uint8_t qos) {
@@ -130,14 +148,14 @@ void setupMQTT()
 {
   mqttOnline = false;
   mqttReconnectTimer = xTimerCreate("mqttTimer", pdMS_TO_TICKS(2000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(connectToMqtt));
-
+  watchDogTimer = xTimerCreate("watchDogTimer", pdMS_TO_TICKS(150000), pdFALSE, (void*)0, reinterpret_cast<TimerCallbackFunction_t>(watchDogRestart));
   mqttClient.onConnect(onMqttConnect);
   mqttClient.onDisconnect(onMqttDisconnect);
   mqttClient.onSubscribe(onMqttSubscribe);
   mqttClient.onUnsubscribe(onMqttUnsubscribe);
   mqttClient.onMessage(onMqttMessage);
 //  mqttClient.onPublish(onMqttPublish);
-  mqttClient.setClientId("TfTControl_Clima");
+  mqttClient.setClientId("evccDisplay");
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.connect();
 }
